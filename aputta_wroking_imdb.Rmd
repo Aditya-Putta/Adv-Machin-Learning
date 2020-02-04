@@ -1,0 +1,384 @@
+---
+title: "R Notebook"
+output:
+  word_document: default
+  html_notebook: default
+---
+
+# Loading the IMDB dataset
+```{r}
+library(keras)
+library(tensorflow)
+library(tidyverse)
+library(cowplot)
+
+
+imdb <- dataset_imdb( num_words = 10000)
+
+c(c( train_data, train_lables), c(test_data, test_lables)) %<-% imdb
+
+
+```
+#Encoding the integer sequences into a binary matrix 
+```{r}
+
+vectorize_sequence <- function (sequences, dimension = 10000 ) {
+  
+  results <- matrix (0, nrow = length(sequences), ncol = dimension)
+  for ( i in 1: length(sequences))
+    results[i, sequences[[i]]] <- 1
+           results
+}
+
+x_train <- vectorize_sequence(train_data)
+x_test <- vectorize_sequence(test_data)
+```
+
+#Converting labels to numeric
+```{r}
+y_train <- as.numeric(train_lables)
+y_test <- as.numeric(test_lables)
+```
+
+# Setting aside a validation set
+```{r}
+val_indices <- 1:10000
+
+x_val <- x_train[val_indices,]
+partial_x_train <- x_train[-val_indices,]
+
+
+y_val <- y_train[val_indices]
+partial_y_train <- y_train[-val_indices]
+
+```
+
+
+# building hypothesis sapce based on 3 hiddend layers with 32 as input nodes ans "mse" as loss function
+
+```{r}
+model <- keras_model_sequential() %>%
+  layer_dense(units = 32, activation = "tanh", input_shape = c(10000)) %>%
+  layer_dense(units = 32, activation = "tanh" ) %>% 
+  layer_dense(units = 32, activation = "tanh" ) %>%
+  layer_dense(units = 1, activation = "sigmoid")
+
+```
+
+# Compiling the model
+```{r}
+model %>% compile(
+  optimizer = "rmsprop",
+  loss = "mse",
+  metrics = c("accuracy")
+  )
+```
+
+#Training your model
+```{r}
+history <- model %>% fit(
+  partial_x_train,
+  partial_y_train,
+  epochs = 20,
+  batch_size = 512,
+  validation_data = list(x_val,y_val)
+)
+
+```
+```{r echo=FALSE}
+
+history.df <- as.data.frame(history$metrics)
+names(history.df) <-c("train_loss","train_accuracy","val_loss","val_accuracy")
+history.df <- history.df %>% mutate(epochs = 1:n()) %>% gather("split","values",-epochs) %>% separate(split,c("split","metric")) %>% spread(metric,values)
+g1 <- ggplot(history.df,aes(x=epochs,y=loss,color=split)) + geom_point()+geom_line()+theme_classic()+scale_color_manual(values = c("Red3","royalblue4"))+theme(legend.position = "top",legend.justification = "left",legend.title = element_blank())+ggtitle("Epochs vs Loss ")
+g2 <- ggplot(history.df,aes(x=epochs,y=accuracy,color=split)) + geom_point(show.legend = F)+geom_line(show.legend = F)+theme_classic()+scale_color_manual(values = c("Red3","royalblue4"))
+plot_grid(g1,g2,nrow=2)
+```
+
+
+ **Comments** based on above polt we see model overfitting on training data and not performing well on validation data hecne we'll tune further paramater of the model
+
+# building hypothesis sapce based on 3 hiddend layers with "64" as input nodes ans "mse" as loss function
+
+```{r}
+model <- keras_model_sequential() %>%
+  layer_dense(units = 64, activation = "tanh", input_shape = c(10000)) %>%
+  layer_dense(units = 64, activation = "tanh" ) %>% 
+  layer_dense(units = 64, activation = "tanh" ) %>%
+  layer_dense(units = 1, activation = "sigmoid")
+
+```
+
+# Compiling the model
+```{r}
+model %>% compile(
+  optimizer = "rmsprop",
+  loss = "mse",
+  metrics = c("accuracy")
+  )
+```
+
+#Training your model
+```{r}
+history <- model %>% fit(
+  partial_x_train,
+  partial_y_train,
+  epochs = 20,
+  batch_size = 512,
+  validation_data = list(x_val,y_val)
+)
+```
+
+```{r echo=FALSE}
+
+history.df <- as.data.frame(history$metrics)
+names(history.df) <-c("train_loss","train_accuracy","val_loss","val_accuracy")
+history.df <- history.df %>% mutate(epochs = 1:n()) %>% gather("split","values",-epochs) %>% separate(split,c("split","metric")) %>% spread(metric,values)
+g1 <- ggplot(history.df,aes(x=epochs,y=loss,color=split)) + geom_point()+geom_line()+theme_classic()+scale_color_manual(values = c("Red3","royalblue4"))+theme(legend.position = "top",legend.justification = "left",legend.title = element_blank())+ggtitle("Epochs vs Loss ")
+g2 <- ggplot(history.df,aes(x=epochs,y=accuracy,color=split)) + geom_point(show.legend = F)+geom_line(show.legend = F)+theme_classic()+scale_color_manual(values = c("Red3","royalblue4"))
+plot_grid(g1,g2,nrow=2)
+```
+
+
+**Comments** based on above polt we observe  model overfitting on training data and not performing well on validation data hecne we'll tune further paramater of the model here we'll add regularization to hidden layer and see if model is performing better on validation 
+
+# building hypothesis sapce based on 3 hiddend layers with "32" as input nodes ,"mse" as loss function and "regularizer_l2(0.001)"
+
+```{r}
+
+model <- keras_model_sequential() %>%
+  layer_dense(units = 32,kernel_regularizer = regularizer_l2(0.001) ,activation = "tanh", input_shape = c(10000)) %>%
+  layer_dense(units = 32,kernel_regularizer = regularizer_l2(0.001), activation = "tanh" ) %>% 
+  layer_dense(units = 32,kernel_regularizer = regularizer_l2(0.001), activation = "tanh" ) %>%
+  layer_dense(units = 1, activation = "sigmoid")
+
+```
+## Compiling the model
+```{r}
+model %>% compile(
+  optimizer = "rmsprop",
+  loss = "mse",
+  metrics = c("accuracy")
+  )
+```
+##Training your model
+```{r}
+history <- model %>% fit(
+  partial_x_train,
+  partial_y_train,
+  epochs = 20,
+  batch_size = 512,
+  validation_data = list(x_val,y_val)
+)
+
+```
+
+```{r echo=FALSE}
+
+history.df <- as.data.frame(history$metrics)
+names(history.df) <-c("train_loss","train_accuracy","val_loss","val_accuracy")
+history.df <- history.df %>% mutate(epochs = 1:n()) %>% gather("split","values",-epochs) %>% separate(split,c("split","metric")) %>% spread(metric,values)
+g1 <- ggplot(history.df,aes(x=epochs,y=loss,color=split)) + geom_point()+geom_line()+theme_classic()+scale_color_manual(values = c("Red3","royalblue4"))+theme(legend.position = "top",legend.justification = "left",legend.title = element_blank())+ggtitle("Epochs vs Loss ")
+g2 <- ggplot(history.df,aes(x=epochs,y=accuracy,color=split)) + geom_point(show.legend = F)+geom_line(show.legend = F)+theme_classic()+scale_color_manual(values = c("Red3","royalblue4"))
+plot_grid(g1,g2,nrow=2)
+```
+
+**Comments** based on above polt we observe  model overfitting on training data and not performing well on validation data hecne we'll tune further paramater of the model here we'll add regularization to hidden layer and see if model is performing better on validation 
+
+# building hypothesis sapce based on 3 hiddend layers with "32" as input nodes ,"mse" as loss function and "regularizer_l1(0.001)"
+
+```{r}
+
+model <- keras_model_sequential() %>%
+  layer_dense(units = 32,kernel_regularizer = regularizer_l1(0.001) ,activation = "tanh", input_shape = c(10000)) %>%
+  layer_dense(units = 32,kernel_regularizer = regularizer_l1(0.001), activation = "tanh" ) %>% 
+  layer_dense(units = 32,kernel_regularizer = regularizer_l1(0.001), activation = "tanh" ) %>%
+  layer_dense(units = 1, activation = "sigmoid")
+
+```
+## Compiling the model
+```{r}
+model %>% compile(
+  optimizer = "rmsprop",
+  loss = "mse",
+  metrics = c("accuracy")
+  )
+```
+##Training your model
+```{r}
+history <- model %>% fit(
+  partial_x_train,
+  partial_y_train,
+  epochs = 20,
+  batch_size = 512,
+  validation_data = list(x_val,y_val)
+)
+
+```
+
+```{r echo=FALSE}
+
+history.df <- as.data.frame(history$metrics)
+names(history.df) <-c("train_loss","train_accuracy","val_loss","val_accuracy")
+history.df <- history.df %>% mutate(epochs = 1:n()) %>% gather("split","values",-epochs) %>% separate(split,c("split","metric")) %>% spread(metric,values)
+g1 <- ggplot(history.df,aes(x=epochs,y=loss,color=split)) + geom_point()+geom_line()+theme_classic()+scale_color_manual(values = c("Red3","royalblue4"))+theme(legend.position = "top",legend.justification = "left",legend.title = element_blank())+ggtitle("Epochs vs Loss ")
+g2 <- ggplot(history.df,aes(x=epochs,y=accuracy,color=split)) + geom_point(show.legend = F)+geom_line(show.legend = F)+theme_classic()+scale_color_manual(values = c("Red3","royalblue4"))
+plot_grid(g1,g2,nrow=2)
+```
+
+**Comments** based on above polt we observe model perfomring well on validation data which can be improved by adding dropout to hidden layer
+
+# building hypothesis sapce based on 3 hiddend layers with "32" as input nodes ,"mse" as loss function "regularizer_l(0.001)" and adding dropout layer with value .50
+
+```{r}
+
+model <- keras_model_sequential() %>%
+  layer_dense(units = 32,kernel_regularizer = regularizer_l1(0.001) ,activation = "tanh", input_shape = c(10000)) %>%
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = 32,kernel_regularizer = regularizer_l1(0.001), activation = "tanh" ) %>% 
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = 32,kernel_regularizer = regularizer_l1(0.001), activation = "tanh" ) %>%
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = 1, activation = "sigmoid")
+
+```
+## Compiling the model
+```{r}
+model %>% compile(
+  optimizer = "rmsprop",
+  loss = "mse",
+  metrics = c("accuracy")
+  )
+```
+##Training your model
+```{r}
+history <- model %>% fit(
+  partial_x_train,
+  partial_y_train,
+  epochs = 20,
+  batch_size = 250,
+  validation_data = list(x_val,y_val)
+)
+
+```
+```{r echo=FALSE}
+
+history.df <- as.data.frame(history$metrics)
+names(history.df) <-c("train_loss","train_accuracy","val_loss","val_accuracy")
+history.df <- history.df %>% mutate(epochs = 1:n()) %>% gather("split","values",-epochs) %>% separate(split,c("split","metric")) %>% spread(metric,values)
+g1 <- ggplot(history.df,aes(x=epochs,y=loss,color=split)) + geom_point()+geom_line()+theme_classic()+scale_color_manual(values = c("Red3","royalblue4"))+theme(legend.position = "top",legend.justification = "left",legend.title = element_blank())+ggtitle("Epochs vs Loss ")
+g2 <- ggplot(history.df,aes(x=epochs,y=accuracy,color=split)) + geom_point(show.legend = F)+geom_line(show.legend = F)+theme_classic()+scale_color_manual(values = c("Red3","royalblue4"))
+plot_grid(g1,g2,nrow=2)
+```
+
+
+**Comments** based on above polt we observe  model is performing better on validation set hence moving forward to test on "test" set to find output
+
+# Retraining a model from scratch
+
+```{r}
+model_r <- keras_model_sequential() %>%
+  layer_dense(units = 32,kernel_regularizer = regularizer_l1(0.001) ,activation = "tanh", input_shape = c(10000)) %>%
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = 32,kernel_regularizer = regularizer_l1(0.001), activation = "tanh" ) %>% 
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = 32,kernel_regularizer = regularizer_l1(0.001), activation = "tanh" ) %>%
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = 1, activation = "sigmoid")
+
+
+model_r %>% compile(
+  optimizer = "rmsprop",
+  loss = "mse",
+  metrics = c("accuracy")
+  )
+
+model_r  %>% fit(
+  x_train,
+  y_train,
+  epochs = 10,
+  batch_size = 250)
+
+result <- model_r %>%  evaluate(x_test,y_test)
+result
+```
+**COmments** on test set show accuracy of 84%
+
+
+# building hypothesis sapce based on 3 hiddend layers with "64"
+
+```{r}
+
+model <- keras_model_sequential() %>%
+  layer_dense(units = 64,kernel_regularizer = regularizer_l1(0.001) ,activation = "tanh", input_shape = c(10000)) %>%
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = 64,kernel_regularizer = regularizer_l1(0.001), activation = "tanh" ) %>% 
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = 64,kernel_regularizer = regularizer_l1(0.001), activation = "tanh" ) %>%
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = 1, activation = "sigmoid")
+
+```
+## Compiling the model
+```{r}
+model %>% compile(
+  optimizer = "rmsprop",
+  loss = "mse",
+  metrics = c("accuracy")
+  )
+```
+##Training your model
+```{r}
+history <- model %>% fit(
+  partial_x_train,
+  partial_y_train,
+  epochs = 20,
+  batch_size = 250,
+  validation_data = list(x_val,y_val)
+)
+
+```
+```{r echo=FALSE}
+
+history.df <- as.data.frame(history$metrics)
+names(history.df) <-c("train_loss","train_accuracy","val_loss","val_accuracy")
+history.df <- history.df %>% mutate(epochs = 1:n()) %>% gather("split","values",-epochs) %>% separate(split,c("split","metric")) %>% spread(metric,values)
+g1 <- ggplot(history.df,aes(x=epochs,y=loss,color=split)) + geom_point()+geom_line()+theme_classic()+scale_color_manual(values = c("Red3","royalblue4"))+theme(legend.position = "top",legend.justification = "left",legend.title = element_blank())+ggtitle("Epochs vs Loss ")
+g2 <- ggplot(history.df,aes(x=epochs,y=accuracy,color=split)) + geom_point(show.legend = F)+geom_line(show.legend = F)+theme_classic()+scale_color_manual(values = c("Red3","royalblue4"))
+plot_grid(g1,g2,nrow=2)
+```
+
+
+**Comments** based on above polt we observe  model performs is better than "32" and is stable 
+
+## Retraining a model from scratch
+
+```{r}
+model_r <- keras_model_sequential() %>%
+  layer_dense(units = 64,kernel_regularizer = regularizer_l1(0.001) ,activation = "tanh", input_shape = c(10000)) %>%
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = 64,kernel_regularizer = regularizer_l1(0.001), activation = "tanh" ) %>% 
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = 64,kernel_regularizer = regularizer_l1(0.001), activation = "tanh" ) %>%
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = 1, activation = "sigmoid")
+
+
+model_r %>% compile(
+  optimizer = "rmsprop",
+  loss = "mse",
+  metrics = c("accuracy")
+  )
+
+model_r  %>% fit(
+  x_train,
+  y_train,
+  epochs = 9,
+  batch_size = 250)
+
+result <- model_r %>%  evaluate(x_test,y_test)
+result
+
+
+```
+**Comments** based on above model we see model with units = 64  is performing better than units = 32  with improved accuracy of 86% however loss is also increased from  0.3523318 to 0.4975586
